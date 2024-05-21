@@ -30,4 +30,14 @@ export class MailService {
       2FA Team`,
     })
   }
+
+  sendPasswordChangeCode(email: string, code: string) {
+    this.mailerService.sendMail({
+      to: email,
+      from: `2FA <${process.env.EMAIL_ADDRESS}>`,
+      subject: "Password change",
+      html: `Hi! Here is a temporary security code to change password to your 2FA Account. It can only be used once within the next <b>5</b> minutes, after which it will expire:<br>
+      <b>${code}</b><br>`,
+    })
+  }
 }

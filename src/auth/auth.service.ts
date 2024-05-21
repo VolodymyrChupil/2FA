@@ -7,7 +7,7 @@ import {
   RequestTimeoutException,
   ForbiddenException,
 } from "@nestjs/common"
-import { LoginBody } from "./auth.interface"
+import { LoginBody, UpdatePwd } from "./auth.interface"
 import { Request, Response } from "express"
 import { User } from "src/models/user.model"
 import * as bcrypt from "bcrypt"
@@ -170,5 +170,56 @@ export class AuthService {
     })
 
     return res.json({ accessToken })
+  }
+
+  async changePassword(req: Request, res: Response, body: UpdatePwd) {
+    const { password, newPassword, verificationCode } = body
+    if (!password || !newPassword) {
+      throw new NotAcceptableException(
+        "Old password and new password are required!",
+      )
+    }
+
+    const user = await User.findById(req.userId).exec()
+    if (!user) {
+      throw new UnauthorizedException()
+    }
+
+    const match = await bcrypt.compare(password, user.password)
+    if (!match) {
+      throw new UnauthorizedException()
+    }
+
+    if (!verificationCode) {
+      const code = crypto.randomBytes(6).toString("hex")
+      const date = addMinutes(new Date(), 5)
+
+      try {
+        user.verificationCode = code
+        user.verificationCodeExpiredAt = date
+        await user.save()
+
+        this.mailService.sendPasswordChangeCode(user.email, code)
+        res.status(206).send("We send verification code on your email")
+      } catch (err) {
+        throw new ServiceUnavailableException()
+      }
+    }
+
+    if (compareAsc(new Date(), user.verificationCodeExpiredAt) !== -1) {
+      throw new RequestTimeoutException("Verification code expired")
+    }
+
+    if (verificationCode !== user.verificationCode) {
+      throw new UnauthorizedException("Verification code not valid")
+    }
+
+    const hashedPwd = await bcrypt.hash(newPassword, 10)
+    user.password = hashedPwd
+    user.verificationCode = null
+    user.verificationCodeExpiredAt = null
+    await user.save()
+
+    return res.sendStatus(200)
   }
 }

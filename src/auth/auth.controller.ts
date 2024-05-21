@@ -1,7 +1,16 @@
-import { Controller, Post, Get, Req, Res, Body } from "@nestjs/common"
+import {
+  Controller,
+  Post,
+  Get,
+  Req,
+  Res,
+  Body,
+  UseGuards,
+} from "@nestjs/common"
 import { Request, Response } from "express"
 import { AuthService } from "./auth.service"
-import { LoginBody } from "./auth.interface"
+import { AuthGuard } from "./auth.guard"
+import { LoginBody, UpdatePwd } from "./auth.interface"
 import { Throttle } from "@nestjs/throttler"
 
 @Controller("auth")
@@ -22,5 +31,15 @@ export class AuthController {
   @Get("refresh")
   refresh(@Req() req: Request, @Res() res: Response) {
     return this.authService.refresh(req, res)
+  }
+
+  @UseGuards(AuthGuard)
+  @Post("change-pwd")
+  changePassword(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() body: UpdatePwd,
+  ) {
+    return this.authService.changePassword(req, res, body)
   }
 }
