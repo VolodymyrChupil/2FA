@@ -6,11 +6,13 @@ import {
   Res,
   Body,
   UseGuards,
+  ValidationPipe,
 } from "@nestjs/common"
 import { Request, Response } from "express"
 import { AuthService } from "./auth.service"
 import { AuthGuard } from "./auth.guard"
-import { LoginBody, UpdatePwd } from "./auth.interface"
+import { LoginBody } from "./auth.interface"
+import { UpdatePwdDto } from "./auth.dto"
 import { Throttle } from "@nestjs/throttler"
 
 @Controller("auth")
@@ -38,7 +40,7 @@ export class AuthController {
   changePassword(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: UpdatePwd,
+    @Body(ValidationPipe) body: UpdatePwdDto,
   ) {
     return this.authService.changePassword(req, res, body)
   }

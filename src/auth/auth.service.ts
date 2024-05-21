@@ -7,7 +7,8 @@ import {
   RequestTimeoutException,
   ForbiddenException,
 } from "@nestjs/common"
-import { LoginBody, UpdatePwd } from "./auth.interface"
+import { LoginBody } from "./auth.interface"
+import { UpdatePwdDto } from "./auth.dto"
 import { Request, Response } from "express"
 import { User } from "src/models/user.model"
 import * as bcrypt from "bcrypt"
@@ -172,11 +173,12 @@ export class AuthService {
     return res.json({ accessToken })
   }
 
-  async changePassword(req: Request, res: Response, body: UpdatePwd) {
+  async changePassword(req: Request, res: Response, body: UpdatePwdDto) {
     const { password, newPassword, verificationCode } = body
-    if (!password || !newPassword) {
+
+    if (password === newPassword) {
       throw new NotAcceptableException(
-        "Old password and new password are required!",
+        "Old password cannot be equal to the new password",
       )
     }
 
