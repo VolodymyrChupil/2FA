@@ -27,6 +27,16 @@ const UserSchema = new Schema({
     default: null,
   },
 
+  resetPasswordPermission: {
+    type: Boolean,
+    default: false,
+  },
+
+  resetPasswordPermissionCode: {
+    type: String,
+    default: null,
+  },
+
   verificationCode: {
     type: String,
     default: null,

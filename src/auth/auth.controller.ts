@@ -7,12 +7,13 @@ import {
   Body,
   UseGuards,
   ValidationPipe,
+  Param,
 } from "@nestjs/common"
 import { Request, Response } from "express"
 import { AuthService } from "./auth.service"
 import { AuthGuard } from "./auth.guard"
 import { LoginBody } from "./auth.interface"
-import { UpdatePwdDto } from "./auth.dto"
+import { UpdatePwdDto, ResetPwdDto } from "./auth.dto"
 import { Throttle } from "@nestjs/throttler"
 
 @Controller("auth")
@@ -43,5 +44,15 @@ export class AuthController {
     @Body(ValidationPipe) body: UpdatePwdDto,
   ) {
     return this.authService.changePassword(req, res, body)
+  }
+
+  @Post("reset-pwd")
+  resetPassword(@Res() res: Response, @Body() body: ResetPwdDto) {
+    return this.authService.resetPassword(res, body)
+  }
+
+  @Get("reset-pwd/:code")
+  confirmPasswordReset(@Param("code") code: string) {
+    return this.authService.confirmPasswordReset(code)
   }
 }

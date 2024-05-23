@@ -1,4 +1,4 @@
-import { IsNotEmpty, Length, IsStrongPassword } from "class-validator"
+import { IsNotEmpty, Length, IsStrongPassword, IsEmail } from "class-validator"
 
 export class UpdatePwdDto {
   @IsNotEmpty()
@@ -9,4 +9,13 @@ export class UpdatePwdDto {
   newPassword: string
 
   verificationCode?: string
+}
+
+export class ResetPwdDto {
+  @IsEmail()
+  email: string
+
+  @Length(12, 32)
+  @IsStrongPassword()
+  newPassword?: string
 }

@@ -6,9 +6,10 @@ import {
   ServiceUnavailableException,
   RequestTimeoutException,
   ForbiddenException,
+  NotFoundException,
 } from "@nestjs/common"
 import { LoginBody } from "./auth.interface"
-import { UpdatePwdDto } from "./auth.dto"
+import { UpdatePwdDto, ResetPwdDto } from "./auth.dto"
 import { Request, Response } from "express"
 import { User } from "src/models/user.model"
 import * as bcrypt from "bcrypt"
@@ -223,5 +224,67 @@ export class AuthService {
     await user.save()
 
     return res.sendStatus(200)
+  }
+
+  async resetPassword(res: Response, body: ResetPwdDto) {
+    const user = await User.findOne({ email: body.email }).exec()
+    if (!user) {
+      throw new NotFoundException()
+    }
+
+    if (!user.resetPasswordPermission) {
+      try {
+        const permissionCode = `${user._id}${crypto.randomBytes(20).toString("hex")}`
+        user.resetPasswordPermissionCode = permissionCode
+        await user.save()
+
+        this.mailService.sendResetPasswordConfirmation(
+          body.email,
+          permissionCode,
+        )
+
+        return res
+          .status(206)
+          .send(`We send confirmation letter on your email.`)
+      } catch (err) {
+        throw new ServiceUnavailableException()
+      }
+    }
+
+    if (!body.newPassword) {
+      throw new BadRequestException("You must enter a new password")
+    }
+
+    if (bcrypt.compareSync(body.newPassword, user.password)) {
+      throw new NotAcceptableException(
+        "Old password cannot be equal to the new password",
+      )
+    }
+
+    const hashedPwd = await bcrypt.hash(body.newPassword, 10)
+
+    user.password = hashedPwd
+    user.resetPasswordPermission = false
+    await user.save()
+
+    return res.status(200).send("Password resetted")
+  }
+
+  async confirmPasswordReset(code: string) {
+    if (!code) throw new BadRequestException()
+    const userId = code.slice(0, 24)
+    const foundUser = await User.findById(userId).exec()
+
+    if (!foundUser) throw new NotFoundException()
+    if (foundUser.resetPasswordPermissionCode !== code) {
+      throw new NotFoundException()
+    }
+
+    foundUser.resetPasswordPermission = true
+    foundUser.resetPasswordPermissionCode = null
+
+    await foundUser.save()
+
+    return "Success, password reset confirmed!"
   }
 }

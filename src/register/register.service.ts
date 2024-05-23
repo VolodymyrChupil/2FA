@@ -3,6 +3,7 @@ import {
   ConflictException,
   ServiceUnavailableException,
   NotFoundException,
+  BadRequestException,
 } from "@nestjs/common"
 import { CreateUserDto } from "./register.dto"
 import { User } from "src/models/user.model"
@@ -42,6 +43,7 @@ export class RegisterService {
   }
 
   async confirmEmail(code: string) {
+    if (!code) throw new BadRequestException()
     const userId = code.slice(0, 24)
     const foundUser = await User.findById(userId).exec()
 
@@ -52,6 +54,6 @@ export class RegisterService {
     foundUser.emailConfirmationCode = null
     await foundUser.save()
 
-    return "Success, email confirmed."
+    return "Success, email confirmed!"
   }
 }

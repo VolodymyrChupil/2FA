@@ -40,4 +40,15 @@ export class MailService {
       <b>${code}</b><br>`,
     })
   }
+
+  sendResetPasswordConfirmation(email: string, code: string) {
+    this.mailerService.sendMail({
+      to: email,
+      from: `2FA <${process.env.EMAIL_ADDRESS}>`,
+      subject: "Reset password",
+      html: `We received a request to reset the password for your account.  If you made this request, please follow the instructions below to reset your password. If you did not request a password reset, please disregard this email or contact our support team for assistance.<br>
+
+      To reset your password, please click this <a href="${process.env.SERVER_URL}/auth/reset-pwd/${code}">link</a>`,
+    })
+  }
 }
