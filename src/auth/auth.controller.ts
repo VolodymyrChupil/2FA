@@ -48,11 +48,15 @@ export class AuthController {
 
   @Post("reset-pwd")
   resetPassword(@Res() res: Response, @Body() body: ResetPwdDto) {
-    return this.authService.resetPassword(res, body)
+    return this.authService.requestPasswordReset(res, body)
   }
 
+  @Throttle({ default: { limit: 5 } })
   @Get("reset-pwd/:code")
-  confirmPasswordReset(@Param("code") code: string) {
-    return this.authService.confirmPasswordReset(code)
+  confirmPasswordReset(
+    @Param("code") code: string,
+    @Body("newPassword") newPassword: string,
+  ) {
+    return this.authService.resetPassword(code, newPassword)
   }
 }

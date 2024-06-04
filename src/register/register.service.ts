@@ -30,7 +30,7 @@ export class RegisterService {
         password: hashedPwd,
       })
 
-      const confirmationCode = `${user._id}${crypto.randomBytes(20).toString("hex")}`
+      const confirmationCode = `${user._id}${crypto.randomBytes(40).toString("hex")}`
       user.emailConfirmationCode = confirmationCode
       await user.save()
 

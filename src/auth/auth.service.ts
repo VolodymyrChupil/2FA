@@ -226,65 +226,60 @@ export class AuthService {
     return res.sendStatus(200)
   }
 
-  async resetPassword(res: Response, body: ResetPwdDto) {
+  async requestPasswordReset(res: Response, body: ResetPwdDto) {
     const user = await User.findOne({ email: body.email }).exec()
     if (!user) {
       throw new NotFoundException()
     }
 
-    if (!user.resetPasswordPermission) {
-      try {
-        const permissionCode = `${user._id}${crypto.randomBytes(20).toString("hex")}`
-        user.resetPasswordPermissionCode = permissionCode
-        await user.save()
+    try {
+      const permissionCode = `${user._id}${crypto.randomBytes(52).toString("hex")}`
+      const date = addMinutes(new Date(), 10)
 
-        this.mailService.sendResetPasswordConfirmation(
-          body.email,
-          permissionCode,
-        )
+      user.resetPasswordPermissionCode = permissionCode
+      user.resetPasswordExpiredAt = date
+      await user.save()
 
-        return res
-          .status(206)
-          .send(`We send confirmation letter on your email.`)
-      } catch (err) {
-        throw new ServiceUnavailableException()
-      }
+      this.mailService.sendResetPasswordConfirmation(body.email, permissionCode)
+
+      return res.status(206).send(`We send confirmation letter on your email.`)
+    } catch (err) {
+      throw new ServiceUnavailableException()
     }
-
-    if (!body.newPassword) {
-      throw new BadRequestException("You must enter a new password")
-    }
-
-    if (bcrypt.compareSync(body.newPassword, user.password)) {
-      throw new NotAcceptableException(
-        "Old password cannot be equal to the new password",
-      )
-    }
-
-    const hashedPwd = await bcrypt.hash(body.newPassword, 10)
-
-    user.password = hashedPwd
-    user.resetPasswordPermission = false
-    await user.save()
-
-    return res.status(200).send("Password resetted")
   }
 
-  async confirmPasswordReset(code: string) {
+  async resetPassword(code: string, newPassword: string) {
     if (!code) throw new BadRequestException()
     const userId = code.slice(0, 24)
     const foundUser = await User.findById(userId).exec()
 
     if (!foundUser) throw new NotFoundException()
+
     if (foundUser.resetPasswordPermissionCode !== code) {
       throw new NotFoundException()
     }
 
-    foundUser.resetPasswordPermission = true
-    foundUser.resetPasswordPermissionCode = null
+    if (compareAsc(new Date(), foundUser.resetPasswordExpiredAt) !== -1) {
+      throw new RequestTimeoutException("Verification code expired")
+    }
 
+    if (!newPassword) {
+      //redirect to client side
+      throw new BadRequestException("Provide new password")
+    }
+
+    if (bcrypt.compareSync(newPassword, foundUser.password)) {
+      throw new NotAcceptableException(
+        "Old password cannot be equal to the new password",
+      )
+    }
+
+    const hashedPwd = await bcrypt.hash(newPassword, 10)
+    foundUser.password = hashedPwd
+    foundUser.resetPasswordPermissionCode = null
+    foundUser.resetPasswordExpiredAt = null
     await foundUser.save()
 
-    return "Success, password reset confirmed!"
+    return "Password resetted"
   }
 }
