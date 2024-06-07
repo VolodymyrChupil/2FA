@@ -11,10 +11,13 @@ export class UpdatePwdDto {
   verificationCode?: string
 }
 
-export class ResetPwdDto {
+export class RequestPasswordResetDto {
+  @IsNotEmpty()
   @IsEmail()
   email: string
+}
 
+export class ResetPwdDto {
   @Length(12, 32)
   @IsStrongPassword()
   newPassword?: string

@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from "@nestjs/common"
 import { LoginBody } from "./auth.interface"
-import { UpdatePwdDto, ResetPwdDto } from "./auth.dto"
+import { UpdatePwdDto, ResetPwdDto, RequestPasswordResetDto } from "./auth.dto"
 import { Request, Response } from "express"
 import { User } from "src/models/user.model"
 import * as bcrypt from "bcrypt"
@@ -202,7 +202,7 @@ export class AuthService {
         user.verificationCodeExpiredAt = date
         await user.save()
 
-        this.mailService.sendPasswordChangeCode(user.email, code)
+        this.mailService.sendChangePasswordCode(user.email, code)
         res.status(206).send("We send verification code on your email")
       } catch (err) {
         throw new ServiceUnavailableException()
@@ -226,7 +226,7 @@ export class AuthService {
     return res.sendStatus(200)
   }
 
-  async requestPasswordReset(res: Response, body: ResetPwdDto) {
+  async requestPasswordReset(res: Response, body: RequestPasswordResetDto) {
     const user = await User.findOne({ email: body.email }).exec()
     if (!user) {
       throw new NotFoundException()
@@ -248,7 +248,7 @@ export class AuthService {
     }
   }
 
-  async resetPassword(code: string, newPassword: string) {
+  async resetPassword(code: string, body: ResetPwdDto) {
     if (!code) throw new BadRequestException()
     const userId = code.slice(0, 24)
     const foundUser = await User.findById(userId).exec()
@@ -263,18 +263,18 @@ export class AuthService {
       throw new RequestTimeoutException("Verification code expired")
     }
 
-    if (!newPassword) {
+    if (!body.newPassword) {
       //redirect to client side
-      throw new BadRequestException("Provide new password")
+      throw new BadRequestException("Provide a new password")
     }
 
-    if (bcrypt.compareSync(newPassword, foundUser.password)) {
+    if (bcrypt.compareSync(body.newPassword, foundUser.password)) {
       throw new NotAcceptableException(
         "Old password cannot be equal to the new password",
       )
     }
 
-    const hashedPwd = await bcrypt.hash(newPassword, 10)
+    const hashedPwd = await bcrypt.hash(body.newPassword, 10)
     foundUser.password = hashedPwd
     foundUser.resetPasswordPermissionCode = null
     foundUser.resetPasswordExpiredAt = null

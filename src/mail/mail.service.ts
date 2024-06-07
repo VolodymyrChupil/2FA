@@ -1,5 +1,11 @@
 import { Injectable } from "@nestjs/common"
 import { MailerService } from "@nestjs-modules/mailer"
+import {
+  sendEmailConfirmationTMP,
+  sendVerificationCodeTMP,
+  sendPasswordChangeCodeTMP,
+  sendResetPasswordConfirmationTMP,
+} from "./mail.template"
 
 @Injectable()
 export class MailService {
@@ -10,11 +16,7 @@ export class MailService {
       to: email,
       from: `2FA <${process.env.EMAIL_ADDRESS}>`,
       subject: "Email Address Confirmation",
-      html: `Thank you for registering on our website 2FA <br>
-      To confirm your email follow this <a href="${process.env.SERVER_URL}/register/${code}">link</a><br>
-      If you did not request this email confirmation disregard this email<br>.
-      Sincerely,<br>
-      2FA Team`,
+      html: sendEmailConfirmationTMP(code),
     })
   }
 
@@ -22,22 +24,17 @@ export class MailService {
     this.mailerService.sendMail({
       to: email,
       from: `2FA <${process.env.EMAIL_ADDRESS}>`,
-      subject: "2FA Security Code",
-      html: `Hi! Here is a temporary security code for your 2FA Account. It can only be used once within the next <b>5</b> minutes, after which it will expire:<br>
-      <b>${code}</b><br>
-      Did you receive this email without having an active request from 2FA to enter a verification code? If so, the security of your 2FA account may be compromised. Please <b>change your password as soon as possible.</b><br>
-      Sincerely,<br>
-      2FA Team`,
+      subject: "Security Code",
+      html: sendVerificationCodeTMP(code),
     })
   }
 
-  sendPasswordChangeCode(email: string, code: string) {
+  sendChangePasswordCode(email: string, code: string) {
     this.mailerService.sendMail({
       to: email,
       from: `2FA <${process.env.EMAIL_ADDRESS}>`,
       subject: "Password change",
-      html: `Hi! Here is a temporary security code to change password to your 2FA Account. It can only be used once within the next <b>5</b> minutes, after which it will expire:<br>
-      <b>${code}</b><br>`,
+      html: sendPasswordChangeCodeTMP(code),
     })
   }
 
@@ -46,9 +43,7 @@ export class MailService {
       to: email,
       from: `2FA <${process.env.EMAIL_ADDRESS}>`,
       subject: "Reset password",
-      html: `We received a request to reset the password for your account.  If you made this request, please follow the instructions below to reset your password. If you did not request a password reset, please disregard this email or contact our support team for assistance.<br>
-
-      To reset your password, please click this <a href="${process.env.SERVER_URL}/auth/reset-pwd/${code}">link</a>`,
+      html: sendResetPasswordConfirmationTMP(code),
     })
   }
 }
