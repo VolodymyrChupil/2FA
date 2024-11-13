@@ -15,7 +15,6 @@ import { MailerModule } from "@nestjs-modules/mailer"
 import { MailModule } from "./mail/mail.module"
 import { JwtModule } from "@nestjs/jwt"
 import { LoggerMiddleware } from "./logger/logger.middleware"
-import { LoggerModule } from "./logger/logger.module"
 
 @Module({
   imports: [
@@ -28,7 +27,6 @@ import { LoggerModule } from "./logger/logger.module"
     }),
     MailModule,
     JwtModule,
-    LoggerModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
