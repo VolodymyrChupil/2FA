@@ -1,4 +1,9 @@
-import { Module } from "@nestjs/common"
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from "@nestjs/common"
 import { AppController } from "./app.controller"
 import { AppService } from "./app.service"
 import { AuthModule } from "./auth/auth.module"
@@ -9,6 +14,8 @@ import { RegisterModule } from "./register/register.module"
 import { MailerModule } from "@nestjs-modules/mailer"
 import { MailModule } from "./mail/mail.module"
 import { JwtModule } from "@nestjs/jwt"
+import { LoggerMiddleware } from "./logger/logger.middleware"
+import { LoggerModule } from "./logger/logger.module"
 
 @Module({
   imports: [
@@ -21,8 +28,15 @@ import { JwtModule } from "@nestjs/jwt"
     }),
     MailModule,
     JwtModule,
+    LoggerModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(LoggerMiddleware)
+      .forRoutes({ path: "*", method: RequestMethod.ALL })
+  }
+}
