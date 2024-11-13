@@ -9,19 +9,18 @@ import { format } from "date-fns"
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
-    const date = `[${format(new Date(), "dd/MM/yyyy HH:mm:ss")}]`
-    const day = `${format(new Date(), "dd-MM-yyyy")}`
     const dirPath = path.join(process.cwd(), "logs")
-
     if (!fs.existsSync(dirPath)) {
       fsP.mkdir(dirPath)
     }
 
+    const day = `${format(new Date(), "dd-MM-yyyy")}`
     const logStream = fs.createWriteStream(path.join(dirPath, `${day}.log`), {
       flags: "a",
     })
 
     morgan.token("custom-date", () => {
+      const date = `[${format(new Date(), "dd/MM/yyyy HH:mm:ss")}]`
       return `${date}`
     })
 
