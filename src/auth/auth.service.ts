@@ -62,7 +62,7 @@ export class AuthService {
         await foundUser.save()
 
         this.mailService.sendVerificationCode(email, code)
-        res.status(206).send("We send verification code on your email")
+        return res.status(206).send("We send verification code on your email")
       } catch (err) {
         throw new ServiceUnavailableException()
       }

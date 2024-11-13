@@ -58,7 +58,7 @@ export class AuthController {
   @Get("reset-pwd/:code")
   confirmPasswordReset(
     @Param("code") code: string,
-    @Body() newPassword: ResetPwdDto,
+    @Body(ValidationPipe) newPassword: ResetPwdDto,
   ) {
     return this.authService.resetPassword(code, newPassword)
   }
