@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common"
+import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common"
 import { AppController } from "./app.controller"
 import { AppService } from "./app.service"
 import { ConfigModule } from "@nestjs/config"
@@ -7,6 +7,7 @@ import { APP_GUARD } from "@nestjs/core"
 import { MailerModule } from "@nestjs-modules/mailer"
 import * as path from "path"
 import { HandlebarsAdapter } from "@nestjs-modules/mailer/dist/adapters/handlebars.adapter"
+import { LoggerMiddleware } from "./common/middleware/logger.middleware"
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -28,4 +29,8 @@ import { HandlebarsAdapter } from "@nestjs-modules/mailer/dist/adapters/handleba
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerModule }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggerMiddleware).forRoutes("*")
+  }
+}
