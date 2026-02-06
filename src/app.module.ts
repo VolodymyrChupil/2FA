@@ -1,40 +1,31 @@
-import {
-  MiddlewareConsumer,
-  Module,
-  NestModule,
-  RequestMethod,
-} from "@nestjs/common"
+import { Module } from "@nestjs/common"
 import { AppController } from "./app.controller"
 import { AppService } from "./app.service"
-import { AuthModule } from "./auth/auth.module"
 import { ConfigModule } from "@nestjs/config"
-import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler"
+import { ThrottlerModule } from "@nestjs/throttler"
 import { APP_GUARD } from "@nestjs/core"
-import { RegisterModule } from "./register/register.module"
 import { MailerModule } from "@nestjs-modules/mailer"
-import { MailModule } from "./mail/mail.module"
-import { JwtModule } from "@nestjs/jwt"
-import { LoggerMiddleware } from "./logger/logger.middleware"
-
+import * as path from "path"
+import { HandlebarsAdapter } from "@nestjs-modules/mailer/dist/adapters/handlebars.adapter"
 @Module({
   imports: [
-    AuthModule,
     ConfigModule.forRoot(),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 50 }]),
-    RegisterModule,
-    MailerModule.forRoot({
-      transport: process.env.EMAIL_TRANSPORT,
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
+    MailerModule.forRootAsync({
+      useFactory: () => ({
+        transport: process.env.EMAIL_TRANSPORT,
+        defaults: {
+          from: `2FA <${process.env.EMAIL_ADDRESS}>`,
+        },
+        template: {
+          dir: path.join(process.cwd(), "templates"),
+          adapter: new HandlebarsAdapter(),
+          options: { strict: true },
+        },
+      }),
     }),
-    MailModule,
-    JwtModule,
   ],
   controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerModule }],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(LoggerMiddleware)
-      .forRoutes({ path: "*", method: RequestMethod.ALL })
-  }
-}
+export class AppModule {}
