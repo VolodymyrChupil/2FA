@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -15,7 +16,7 @@ model User {
   updated_at DateTime @updatedAt
 
   email_verified                  Boolean   @default(false)
-  email_confirmation_code         String?   @unique
+  email_confirmation_code         String?
   email_confirmation_code_sent_at DateTime?
 
   refresh_tokens    RefreshToken[]
