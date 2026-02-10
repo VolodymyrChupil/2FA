@@ -4,7 +4,7 @@
 
 # Two-factor Authentication
 
-_Stack:_
+**Stack:**
 
 - NestJS
 - TypeScript
@@ -28,7 +28,7 @@ POSTGRES_PASSWORD=postgres
 POSTGRES_DB=postgres
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
 
-EMAIL_TRANSPORT=smtp://your_email_address:KEY@smtp.gmail.com:587
+EMAIL_TRANSPORT=smtp://your_email_address:your_email_key@smtp.gmail.com:587
 EMAIL_ADDRESS=your_email_address
 
 ACCESS_TOKEN=your_access_token_secret

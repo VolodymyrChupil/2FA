@@ -8,11 +8,22 @@ export class MailService {
   sendEmailConfirmation(to: string, code: string) {
     return this.mailerService.sendMail({
       to,
-      subject: "2FA Confirmation Code",
+      subject: "2FA Email Confirmation",
       template: "email-confirmation",
       context: {
         code,
         server_url: process.env.SERVER_URL,
+      },
+    })
+  }
+
+  sendVerificationCode(to: string, code: string) {
+    return this.mailerService.sendMail({
+      to,
+      subject: "2FA Verification Code",
+      template: "verification-code",
+      context: {
+        code,
       },
     })
   }

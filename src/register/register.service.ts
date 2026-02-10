@@ -51,10 +51,10 @@ export class RegisterService {
         email,
         email_confirmation_code,
       )
-      return "User registered successfully, please check your email to confirm your account"
+      return "User registered successfully, check your email to confirm your account"
     } catch (e) {
       throw new ServiceUnavailableException(
-        "Registration failed, please try again later",
+        "Registration failed, try again later",
       )
     }
   }

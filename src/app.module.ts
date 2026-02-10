@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common"
+import { Module, NestModule } from "@nestjs/common"
 import { AppController } from "./app.controller"
 import { AppService } from "./app.service"
 import { ConfigModule } from "@nestjs/config"
@@ -7,10 +7,11 @@ import { APP_GUARD } from "@nestjs/core"
 import { MailerModule } from "@nestjs-modules/mailer"
 import * as path from "path"
 import { HandlebarsAdapter } from "@nestjs-modules/mailer/dist/adapters/handlebars.adapter"
-import { LoggerMiddleware } from "./common/middleware/logger.middleware"
 import { MailModule } from "./mail/mail.module"
 import { RegisterModule } from "./register/register.module"
 import { PrismaModule } from "./prisma/prisma.module"
+import { AuthModule } from "./auth/auth.module"
+import { LoggerMiddleware } from "./common/middleware/logger.middleware"
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -36,12 +37,13 @@ import { PrismaModule } from "./prisma/prisma.module"
     MailModule,
     RegisterModule,
     PrismaModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
+  configure(consumer) {
     consumer.apply(LoggerMiddleware).forRoutes("*")
   }
 }
