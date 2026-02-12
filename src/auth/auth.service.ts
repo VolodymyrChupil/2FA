@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common"
@@ -32,11 +31,6 @@ export class AuthService {
       throw new UnauthorizedException("Invalid credentials")
     }
 
-    const pwdMatch = await bcrypt.compare(password, user.password)
-    if (!pwdMatch) {
-      throw new UnauthorizedException("Invalid credentials")
-    }
-
     if (!user.email_verified) {
       if (
         user.email_confirmation_code_sent_at &&
@@ -53,6 +47,11 @@ export class AuthService {
       throw new BadRequestException(
         "Email not confirmed. Please check your email.",
       )
+    }
+
+    const pwdMatch = await bcrypt.compare(password, user.password)
+    if (!pwdMatch) {
+      throw new UnauthorizedException("Invalid credentials")
     }
 
     if (!verificationCode) {
@@ -79,7 +78,7 @@ export class AuthService {
       })
 
     if (!foundUserVerificationCode) {
-      throw new NotFoundException()
+      throw new UnauthorizedException()
     }
     if (verificationCode !== foundUserVerificationCode.code) {
       throw new UnauthorizedException("Invalid credentials")
