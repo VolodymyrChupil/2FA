@@ -1,285 +1,233 @@
 import {
-  Injectable,
-  NotAcceptableException,
-  UnauthorizedException,
   BadRequestException,
-  ServiceUnavailableException,
-  RequestTimeoutException,
   ForbiddenException,
-  NotFoundException,
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException,
 } from "@nestjs/common"
-import { LoginBody } from "./auth.interface"
-import { UpdatePwdDto, ResetPwdDto, RequestPasswordResetDto } from "./auth.dto"
-import { Request, Response } from "express"
-import { User } from "src/models/user.model"
-import * as bcrypt from "bcrypt"
-import * as crypto from "crypto"
-import { JwtService } from "@nestjs/jwt"
+import { PrismaService } from "src/prisma/prisma.service"
 import { MailService } from "src/mail/mail.service"
-import { addMinutes, compareAsc } from "date-fns"
+import { LoginDto } from "./auth.dto"
+import { Request, Response } from "express"
+import * as bcrypt from "bcrypt"
+import { isAfter, addMinutes } from "date-fns"
+import { generateRandomNumber } from "src/utils/number.generator"
+import { JwtService } from "@nestjs/jwt"
 
 @Injectable()
 export class AuthService {
   constructor(
+    private readonly prisma: PrismaService,
     private readonly mailService: MailService,
-    private readonly jwtService: JwtService,
+    private readonly jwt: JwtService,
   ) {}
 
-  async login(req: Request, res: Response, body: LoginBody) {
+  async login(req: Request, res: Response, body: LoginDto) {
     const cookies = req.cookies
-    const { email, password, verificationCode } = body
-    if (!email || !password) {
-      throw new NotAcceptableException("Email and password are required!")
+    const { username, password, verificationCode } = body
+
+    const user = await this.prisma.user.findUnique({ where: { username } })
+    if (!user) {
+      throw new UnauthorizedException("Invalid credentials")
     }
 
-    const foundUser = await User.findOne({ email }).exec()
-    if (!foundUser) {
-      throw new UnauthorizedException()
-    }
-
-    const match = await bcrypt.compare(password, foundUser.password)
-    if (!match) {
-      throw new UnauthorizedException()
-    }
-
-    if (!foundUser.emailConfirmed) {
-      this.mailService.sendEmailConfirmation(
-        email,
-        foundUser.emailConfirmationCode,
-      )
+    if (!user.email_verified) {
+      if (
+        user.email_confirmation_code_sent_at &&
+        isAfter(
+          new Date(),
+          addMinutes(user.email_confirmation_code_sent_at, 10),
+        )
+      ) {
+        await this.mailService.sendEmailConfirmation(
+          user.email,
+          user.email_confirmation_code!,
+        )
+      }
       throw new BadRequestException(
-        "You must confirm your email address to log in!",
+        "Email not confirmed. Please check your email.",
       )
+    }
+
+    const pwdMatch = await bcrypt.compare(password, user.password)
+    if (!pwdMatch) {
+      throw new UnauthorizedException("Invalid credentials")
     }
 
     if (!verificationCode) {
-      const code = crypto.randomBytes(6).toString("hex")
-      const date = addMinutes(new Date(), 5)
-
+      const code = generateRandomNumber(8)
+      const expires_at = addMinutes(new Date(), 5)
       try {
-        foundUser.verificationCode = code
-        foundUser.verificationCodeExpiredAt = date
-        await foundUser.save()
+        await this.prisma.verificationCode.update({
+          where: { user_id: user.id },
+          data: { code, expires_at },
+        })
+        await this.mailService.sendVerificationCode(user.email, code)
 
-        this.mailService.sendVerificationCode(email, code)
-        return res.status(206).send("We send verification code on your email")
-      } catch (err) {
+        return res
+          .status(202)
+          .json({ message: "Verification code sent to email" })
+      } catch (e) {
         throw new ServiceUnavailableException()
       }
     }
 
-    if (compareAsc(new Date(), foundUser.verificationCodeExpiredAt) !== -1) {
-      throw new RequestTimeoutException("Verification code expired")
+    const foundUserVerificationCode =
+      await this.prisma.verificationCode.findUnique({
+        where: { user_id: user.id },
+      })
+
+    if (!foundUserVerificationCode) {
+      throw new UnauthorizedException()
+    }
+    if (verificationCode !== foundUserVerificationCode.code) {
+      throw new UnauthorizedException("Invalid credentials")
+    }
+    if (
+      foundUserVerificationCode.expires_at &&
+      isAfter(new Date(), foundUserVerificationCode.expires_at)
+    ) {
+      throw new UnauthorizedException("Verification code expired")
     }
 
-    if (verificationCode !== foundUser.verificationCode) {
-      throw new UnauthorizedException("Verification code not valid")
+    await this.prisma.verificationCode.update({
+      where: { user_id: user.id },
+      data: { code: null, expires_at: null },
+    })
+
+    if (cookies.jwt) {
+      const payload = this.jwt.decode(cookies.jwt)
+      if (payload?.userId) {
+        await this.prisma.refreshToken
+          .deleteMany({
+            where: {
+              user_id: payload.userId,
+              token: cookies.jwt,
+            },
+          })
+          .catch(() => console.error("Failed to delete existing refresh token"))
+      }
     }
 
-    if (foundUser.refreshToken.length > 5) {
-      foundUser.refreshToken = []
-      await foundUser.save()
-    }
-
-    const refreshTokenArr = !cookies?.jwt
-      ? foundUser.refreshToken
-      : foundUser.refreshToken.filter((rt) => rt !== cookies.jwt)
-
-    const accessToken = await this.jwtService.signAsync(
-      { id: foundUser._id },
+    const accessToken = this.jwt.sign(
+      { userId: user.id },
       { expiresIn: "15m", secret: process.env.ACCESS_TOKEN },
     )
-    const newRefreshToken = await this.jwtService.signAsync(
-      { id: foundUser._id },
+    const refreshToken = this.jwt.sign(
+      { userId: user.id },
       { expiresIn: "7d", secret: process.env.REFRESH_TOKEN },
     )
 
-    foundUser.refreshToken = [...refreshTokenArr, newRefreshToken]
-    foundUser.verificationCode = null
-    foundUser.verificationCodeExpiredAt = null
-    await foundUser.save()
+    await this.prisma.refreshToken.create({
+      data: {
+        user_id: user.id,
+        token: refreshToken,
+        expires_at: addMinutes(new Date(), 60 * 24 * 7),
+      },
+    })
 
-    res.cookie("jwt", newRefreshToken, {
+    res.cookie("jwt", refreshToken, {
       httpOnly: true,
       secure: true,
-      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: "strict",
+    })
+
+    return res.json({ accessToken })
+  }
+
+  async refresh(req: Request, res: Response) {
+    const token = req.cookies?.jwt
+    if (!token) {
+      return res.sendStatus(204)
+    }
+
+    let payload
+    try {
+      payload = await this.jwt.verifyAsync(token, {
+        secret: process.env.REFRESH_TOKEN,
+      })
+    } catch (e) {
+      res.clearCookie("jwt", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+      })
+      throw new ForbiddenException()
+    }
+
+    const deletedToken = await this.prisma.refreshToken.deleteMany({
+      where: {
+        user_id: payload.userId,
+        token,
+      },
+    })
+
+    if (deletedToken.count === 0) {
+      await this.prisma.refreshToken.deleteMany({
+        where: { user_id: payload.userId },
+      })
+      res.clearCookie("jwt", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+      })
+      throw new ForbiddenException("Security alert: Token reuse detected")
+    }
+
+    const foundUser = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+    })
+    if (!foundUser) throw new ForbiddenException()
+
+    const accessToken = this.jwt.sign(
+      { userId: foundUser.id },
+      { expiresIn: "15m", secret: process.env.ACCESS_TOKEN },
+    )
+
+    const refreshToken = this.jwt.sign(
+      { userId: foundUser.id },
+      { expiresIn: "7d", secret: process.env.REFRESH_TOKEN },
+    )
+
+    await this.prisma.refreshToken.create({
+      data: {
+        user_id: foundUser.id,
+        token: refreshToken,
+        expires_at: addMinutes(new Date(), 60 * 24 * 7),
+      },
+    })
+
+    res.cookie("jwt", refreshToken, {
+      httpOnly: true,
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: "strict",
     })
 
     return res.json({ accessToken })
   }
 
   async logout(req: Request, res: Response) {
-    const cookies = req.cookies
-    if (!cookies?.jwt) return res.sendStatus(204)
-    const refreshToken = cookies.jwt
-    res.clearCookie("jwt", { httpOnly: true, secure: true, sameSite: "none" })
+    if (!req.cookies?.jwt) {
+      return res.sendStatus(204)
+    }
+
+    const token = req.cookies.jwt
+    res.clearCookie("jwt", { httpOnly: true, secure: true, sameSite: "strict" })
 
     try {
-      const payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: process.env.REFRESH_TOKEN,
-      })
-
-      const foundUser = await User.findById(payload.id).exec()
-      if (!foundUser) return res.sendStatus(204)
-
-      foundUser.refreshToken = foundUser.refreshToken.filter(
-        (rt) => rt !== refreshToken,
-      )
-      await foundUser.save()
+      const payload = this.jwt.decode(token)
+      if (payload?.userId) {
+        await this.prisma.refreshToken.deleteMany({
+          where: {
+            user_id: payload.userId,
+            token,
+          },
+        })
+      }
     } finally {
       return res.sendStatus(204)
     }
-  }
-
-  async refresh(req: Request, res: Response) {
-    const cookies = req.cookies
-    if (!cookies?.jwt) return res.sendStatus(204)
-    const refreshToken = cookies.jwt
-    res.clearCookie("jwt", { httpOnly: true, secure: true, sameSite: "none" })
-
-    const payload = await this.jwtService
-      .verifyAsync(refreshToken, {
-        secret: process.env.REFRESH_TOKEN,
-      })
-      .catch(() => {
-        throw new ForbiddenException()
-      })
-
-    const foundUser = await User.findById(payload.id).exec()
-    if (!foundUser) throw new ForbiddenException()
-
-    const refreshTokenArr = foundUser.refreshToken.filter(
-      (rt) => rt !== refreshToken,
-    )
-    const accessToken = await this.jwtService.signAsync(
-      { id: foundUser._id },
-      { expiresIn: "15m", secret: process.env.ACCESS_TOKEN },
-    )
-    const newRefreshToken = await this.jwtService.signAsync(
-      { id: foundUser._id },
-      { expiresIn: "7d", secret: process.env.REFRESH_TOKEN },
-    )
-
-    foundUser.refreshToken = [...refreshTokenArr, newRefreshToken]
-    await foundUser.save()
-
-    res.cookie("jwt", newRefreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
-
-    return res.json({ accessToken })
-  }
-
-  async changePassword(req: Request, res: Response, body: UpdatePwdDto) {
-    const { password, newPassword, verificationCode } = body
-
-    if (password === newPassword) {
-      throw new NotAcceptableException(
-        "Old password cannot be equal to the new password",
-      )
-    }
-
-    const user = await User.findById(req.userId).exec()
-    if (!user) {
-      throw new UnauthorizedException()
-    }
-
-    const match = await bcrypt.compare(password, user.password)
-    if (!match) {
-      throw new UnauthorizedException()
-    }
-
-    if (!verificationCode) {
-      const code = crypto.randomBytes(6).toString("hex")
-      const date = addMinutes(new Date(), 5)
-
-      try {
-        user.verificationCode = code
-        user.verificationCodeExpiredAt = date
-        await user.save()
-
-        this.mailService.sendChangePasswordCode(user.email, code)
-        res.status(206).send("We send verification code on your email")
-      } catch (err) {
-        throw new ServiceUnavailableException()
-      }
-    }
-
-    if (compareAsc(new Date(), user.verificationCodeExpiredAt) !== -1) {
-      throw new RequestTimeoutException("Verification code expired")
-    }
-
-    if (verificationCode !== user.verificationCode) {
-      throw new UnauthorizedException("Verification code not valid")
-    }
-
-    const hashedPwd = await bcrypt.hash(newPassword, 10)
-    user.password = hashedPwd
-    user.verificationCode = null
-    user.verificationCodeExpiredAt = null
-    await user.save()
-
-    return res.sendStatus(200)
-  }
-
-  async requestPasswordReset(res: Response, body: RequestPasswordResetDto) {
-    const user = await User.findOne({ email: body.email }).exec()
-    if (!user) {
-      throw new NotFoundException()
-    }
-
-    try {
-      const permissionCode = `${user._id}${crypto.randomBytes(52).toString("hex")}`
-      const date = addMinutes(new Date(), 10)
-
-      user.resetPasswordPermissionCode = permissionCode
-      user.resetPasswordExpiredAt = date
-      await user.save()
-
-      this.mailService.sendResetPasswordConfirmation(body.email, permissionCode)
-
-      return res.status(206).send(`We send confirmation letter on your email.`)
-    } catch (err) {
-      throw new ServiceUnavailableException()
-    }
-  }
-
-  async resetPassword(code: string, body: ResetPwdDto) {
-    if (!code) throw new BadRequestException()
-    const userId = code.slice(0, 24)
-    const foundUser = await User.findById(userId).exec()
-
-    if (!foundUser) throw new NotFoundException()
-
-    if (foundUser.resetPasswordPermissionCode !== code) {
-      throw new NotFoundException()
-    }
-
-    if (compareAsc(new Date(), foundUser.resetPasswordExpiredAt) !== -1) {
-      throw new RequestTimeoutException("Verification code expired")
-    }
-
-    if (!body.newPassword) {
-      //redirect to client side
-      throw new BadRequestException("Provide a new password")
-    }
-
-    if (bcrypt.compareSync(body.newPassword, foundUser.password)) {
-      throw new NotAcceptableException(
-        "Old password cannot be equal to the new password",
-      )
-    }
-
-    const hashedPwd = await bcrypt.hash(body.newPassword, 10)
-    foundUser.password = hashedPwd
-    foundUser.resetPasswordPermissionCode = null
-    foundUser.resetPasswordExpiredAt = null
-    await foundUser.save()
-
-    return "Password resetted"
   }
 }

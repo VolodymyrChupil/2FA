@@ -1,24 +1,18 @@
-import { IsNotEmpty, Length, IsStrongPassword, IsEmail } from "class-validator"
-
-export class UpdatePwdDto {
+import { ApiProperty } from "@nestjs/swagger"
+import { IsOptional, IsNotEmpty, IsString } from "class-validator"
+export class LoginDto {
+  @ApiProperty()
   @IsNotEmpty()
+  @IsString()
+  username: string
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
   password: string
 
-  @Length(12, 32)
-  @IsStrongPassword()
-  newPassword: string
-
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
   verificationCode?: string
-}
-
-export class RequestPasswordResetDto {
-  @IsNotEmpty()
-  @IsEmail()
-  email: string
-}
-
-export class ResetPwdDto {
-  @Length(12, 32)
-  @IsStrongPassword()
-  newPassword?: string
 }

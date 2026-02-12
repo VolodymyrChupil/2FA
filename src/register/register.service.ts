@@ -1,59 +1,78 @@
 import {
-  Injectable,
   ConflictException,
-  ServiceUnavailableException,
+  Injectable,
   NotFoundException,
-  BadRequestException,
+  ServiceUnavailableException,
 } from "@nestjs/common"
 import { CreateUserDto } from "./register.dto"
-import { User } from "src/models/user.model"
+import { PrismaService } from "src/prisma/prisma.service"
+import { MailService } from "src/mail/mail.service"
 import * as bcrypt from "bcrypt"
 import * as crypto from "crypto"
-import { MailService } from "src/mail/mail.service"
 
 @Injectable()
 export class RegisterService {
-  constructor(private readonly mailService: MailService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   async createUser(body: CreateUserDto) {
     const { username, email, password } = body
+    const [duplicateUser, duplicateEmail] = await Promise.all([
+      this.prisma.user.findUnique({ where: { username } }),
+      this.prisma.user.findUnique({ where: { email } }),
+    ])
 
-    const duplicate = await User.findOne({ email }).lean().exec()
-    if (duplicate) throw new ConflictException("This email already exists")
+    if (duplicateUser) {
+      throw new ConflictException("Username already exists")
+    }
+    if (duplicateEmail) {
+      throw new ConflictException("Email already exists")
+    }
 
+    const hashedPwd = await bcrypt.hash(password, 10)
+    const email_confirmation_code = crypto.randomBytes(32).toString("hex")
     try {
-      const hashedPwd = await bcrypt.hash(password, 10)
-
-      const user = await User.create({
-        username,
-        email,
-        password: hashedPwd,
+      await this.prisma.user.create({
+        data: {
+          username,
+          email,
+          password: hashedPwd,
+          email_confirmation_code,
+          email_confirmation_code_sent_at: new Date(),
+          verification_code: {
+            create: {},
+          },
+        },
       })
 
-      const confirmationCode = `${user._id}${crypto.randomBytes(40).toString("hex")}`
-      user.emailConfirmationCode = confirmationCode
-      await user.save()
-
-      this.mailService.sendEmailConfirmation(email, confirmationCode)
-
-      return `Success, user: ${username} created. We send confirmation letter on your email.`
-    } catch (err) {
-      throw new ServiceUnavailableException("Registration failed")
+      await this.mailService.sendEmailConfirmation(
+        email,
+        email_confirmation_code,
+      )
+      return "User registered successfully, check your email to confirm your account"
+    } catch (e) {
+      throw new ServiceUnavailableException(
+        "Registration failed, try again later",
+      )
     }
   }
 
   async confirmEmail(code: string) {
-    if (!code) throw new BadRequestException()
-    const userId = code.slice(0, 24)
-    const foundUser = await User.findById(userId).exec()
+    try {
+      await this.prisma.user.update({
+        where: { email_confirmation_code: code },
+        data: {
+          email_verified: true,
+          email_confirmation_code: null,
+          email_confirmation_code_sent_at: null,
+        },
+      })
 
-    if (!foundUser) throw new NotFoundException()
-    if (foundUser.emailConfirmationCode !== code) throw new NotFoundException()
-
-    foundUser.emailConfirmed = true
-    foundUser.emailConfirmationCode = null
-    await foundUser.save()
-
-    return "Success, email confirmed!"
+      return "Email confirmed successfully, you can now log in"
+    } catch (e) {
+      throw new NotFoundException()
+    }
   }
 }

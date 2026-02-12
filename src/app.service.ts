@@ -2,7 +2,11 @@ import { Injectable } from "@nestjs/common"
 
 @Injectable()
 export class AppService {
-  privateRoute(): string {
-    return "If u are reading this that mean u are authorized"
+  getStatus(): string {
+    return `Server is healthy ${new Date()}`
+  }
+
+  protectedRoute(): string {
+    return `This is a protected route`
   }
 }

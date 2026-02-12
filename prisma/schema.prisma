@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         String   @id @default(uuid())
+  username   String   @unique
+  email      String   @unique
+  password   String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  email_verified                  Boolean   @default(false)
+  email_confirmation_code         String?   @unique
+  email_confirmation_code_sent_at DateTime?
+
+  refresh_tokens    RefreshToken[]
+  verification_code VerificationCode?
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  user_id    String
+  token      String
+  created_at DateTime @default(now())
+  expires_at DateTime
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, token])
+  @@index([expires_at])
+}
+
+model VerificationCode {
+  user_id    String    @id
+  code       String?
+  expires_at DateTime?
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
