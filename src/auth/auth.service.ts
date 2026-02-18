@@ -14,6 +14,10 @@ import { isAfter, addMinutes } from "date-fns"
 import { generateRandomNumber } from "src/utils/number.generator"
 import { JwtService } from "@nestjs/jwt"
 
+interface JwtPayload {
+  userId: string
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,7 +27,7 @@ export class AuthService {
   ) {}
 
   async login(req: Request, res: Response, body: LoginDto) {
-    const cookies = req.cookies
+    const cookies = req.cookies as Record<string, string | undefined>
     const { username, password, verificationCode } = body
 
     const user = await this.prisma.user.findUnique({ where: { username } })
@@ -67,7 +71,7 @@ export class AuthService {
         return res
           .status(202)
           .json({ message: "Verification code sent to email" })
-      } catch (e) {
+      } catch {
         throw new ServiceUnavailableException()
       }
     }
@@ -96,7 +100,7 @@ export class AuthService {
     })
 
     if (cookies.jwt) {
-      const payload = this.jwt.decode(cookies.jwt)
+      const payload: JwtPayload = this.jwt.decode(cookies.jwt)
       if (payload?.userId) {
         await this.prisma.refreshToken
           .deleteMany({
@@ -137,17 +141,17 @@ export class AuthService {
   }
 
   async refresh(req: Request, res: Response) {
-    const token = req.cookies?.jwt
+    const token = (req.cookies as Record<string, string | undefined>)?.jwt
     if (!token) {
-      return res.sendStatus(204)
+      throw new ForbiddenException()
     }
 
-    let payload
+    let payload: JwtPayload
     try {
-      payload = await this.jwt.verifyAsync(token, {
+      payload = await this.jwt.verifyAsync<JwtPayload>(token, {
         secret: process.env.REFRESH_TOKEN,
       })
-    } catch (e) {
+    } catch {
       res.clearCookie("jwt", {
         httpOnly: true,
         secure: true,
@@ -209,15 +213,16 @@ export class AuthService {
   }
 
   async logout(req: Request, res: Response) {
-    if (!req.cookies?.jwt) {
+    const cookies = req.cookies as Record<string, string | undefined>
+    const token = cookies?.jwt
+    if (!token) {
       return res.sendStatus(204)
     }
 
-    const token = req.cookies.jwt
     res.clearCookie("jwt", { httpOnly: true, secure: true, sameSite: "strict" })
 
     try {
-      const payload = this.jwt.decode(token)
+      const payload: JwtPayload = this.jwt.decode(token)
       if (payload?.userId) {
         await this.prisma.refreshToken.deleteMany({
           where: {
@@ -226,8 +231,10 @@ export class AuthService {
           },
         })
       }
-    } finally {
-      return res.sendStatus(204)
+    } catch (error) {
+      console.error("Logout error:", error)
     }
+
+    return res.sendStatus(204)
   }
 }

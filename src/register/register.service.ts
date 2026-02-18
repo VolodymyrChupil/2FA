@@ -8,7 +8,7 @@ import { CreateUserDto } from "./register.dto"
 import { PrismaService } from "src/prisma/prisma.service"
 import { MailService } from "src/mail/mail.service"
 import * as bcrypt from "bcrypt"
-import * as crypto from "crypto"
+import * as crypto from "node:crypto"
 
 @Injectable()
 export class RegisterService {
@@ -52,7 +52,7 @@ export class RegisterService {
         email_confirmation_code,
       )
       return "User registered successfully, check your email to confirm your account"
-    } catch (e) {
+    } catch {
       throw new ServiceUnavailableException(
         "Registration failed, try again later",
       )
@@ -71,7 +71,7 @@ export class RegisterService {
       })
 
       return "Email confirmed successfully, you can now log in"
-    } catch (e) {
+    } catch {
       throw new NotFoundException()
     }
   }

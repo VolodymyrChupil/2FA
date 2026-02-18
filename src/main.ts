@@ -23,4 +23,6 @@ async function bootstrap() {
     console.log(`Server is running on http://localhost:${PORT}`)
   })
 }
-bootstrap()
+bootstrap().catch((err) => {
+  console.error("Error starting server:", err)
+})

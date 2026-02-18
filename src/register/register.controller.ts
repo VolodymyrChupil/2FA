@@ -1,7 +1,7 @@
 import { Body, Controller, Post, Get, Param } from "@nestjs/common"
 import { RegisterService } from "./register.service"
 import { CreateUserDto } from "./register.dto"
-import { ApiTags, ApiBody, ApiParam } from "@nestjs/swagger"
+import { ApiTags, ApiBody, ApiParam, ApiOperation } from "@nestjs/swagger"
 import { Throttle } from "@nestjs/throttler"
 
 @ApiTags("register")
@@ -11,12 +11,14 @@ export class RegisterController {
   constructor(private readonly registerService: RegisterService) {}
 
   @Post()
+  @ApiOperation({ summary: "Create a new user" })
   @ApiBody({ type: CreateUserDto })
   createUser(@Body() body: CreateUserDto) {
     return this.registerService.createUser(body)
   }
 
   @Get(":code")
+  @ApiOperation({ summary: "Confirm email address" })
   @ApiParam({ name: "code", description: "Email confirmation code" })
   confirmEmail(@Param("code") code: string) {
     return this.registerService.confirmEmail(code)
